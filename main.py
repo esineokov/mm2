@@ -11,9 +11,11 @@ from aiomql import MetaTrader, TimeFrame
 from prometheus_client import start_http_server, Gauge
 
 from config import env
+from core.condition.pin_bar_conditions import BullishPinBarCondition, BearishPinBarCondition
 from core.condition.ring_high_low_condition import RingLowCondition, RingHighCondition
 from core.condition.time_to_close_candle_condition import TimeUntilCandleCloseCondition
 from core.condition.trend_conditions import UpTrendCondition, DownTrendCondition
+from core.strategy.pin_bar_strategies import BullishPinBarStrategy, BearishPinBarStrategy
 from core.strategy.ring_high_low_strategies import RingLowStrategy, RingHighStrategy
 from core.symbol_monitor import SymbolMonitor
 from core.trading_context import TradingContext
@@ -84,14 +86,13 @@ async def main():
 
             context: TradingContext = TradingContext(terminal=mt5, symbol=symbol.name, timeframe=timeframe)
             delta: timedelta = timedelta(minutes=5)
-
+            time_until_candle_close_condition = TimeUntilCandleCloseCondition(context=context, delta=delta)
             up_trend_condition = UpTrendCondition(context=context)
             down_trend_condition = DownTrendCondition(context=context)
+            # -------------------------------------Ring Low/High-------------------------------------------------------#
 
             ring_low_condition = RingLowCondition(context=context)
             ring_high_condition = RingHighCondition(context=context)
-
-            time_until_candle_close_condition = TimeUntilCandleCloseCondition(context=context, delta=delta)
 
             rl_conditions = [time_until_candle_close_condition, up_trend_condition, ring_low_condition]
             rh_conditions = [time_until_candle_close_condition, down_trend_condition, ring_high_condition]
@@ -103,9 +104,44 @@ async def main():
             rh_strategy = RingHighStrategy(bot=bot, lock=lock, context=context, conditions=rh_conditions)
             rh_monitor = SymbolMonitor(context=context, strategy=rh_strategy)
             rh_task = rh_monitor.monitor(cycle_timeout_s=60, notify_timeout_s=int(delta.total_seconds()))
+            # ------------------------------------Pin Bar--------------------------------------------------------------#
+
+            bullish_pin_bar_condition = BullishPinBarCondition(context=context)
+            bearish_pin_bar_condition = BearishPinBarCondition(context=context)
+
+            bullish_pin_bar_conditions = [
+                time_until_candle_close_condition,
+                up_trend_condition,
+                bullish_pin_bar_condition,
+            ]
+            bearish_pin_bar_conditions = [
+                time_until_candle_close_condition,
+                down_trend_condition,
+                bearish_pin_bar_condition,
+            ]
+
+            bullish_pin_bar_strategy = BullishPinBarStrategy(
+                bot=bot, lock=lock, context=context, conditions=bullish_pin_bar_conditions
+            )
+            bullish_pin_bar_monitor = SymbolMonitor(context=context, strategy=bullish_pin_bar_strategy)
+            bullish_pin_bar_task = bullish_pin_bar_monitor.monitor(
+                cycle_timeout_s=60, notify_timeout_s=int(delta.total_seconds())
+            )
+
+            bearish_pin_bar_strategy = BearishPinBarStrategy(
+                bot=bot, lock=lock, context=context, conditions=bearish_pin_bar_conditions
+            )
+            bearish_pin_bar_monitor = SymbolMonitor(context=context, strategy=bearish_pin_bar_strategy)
+            bearish_pin_bar_task = bearish_pin_bar_monitor.monitor(
+                cycle_timeout_s=60, notify_timeout_s=int(delta.total_seconds())
+            )
+            # ------------------------------------Run tasks------------------------------------------------------------#
 
             task_queue.append(rl_task)
             task_queue.append(rh_task)
+
+            task_queue.append(bullish_pin_bar_task)
+            task_queue.append(bearish_pin_bar_task)
 
     await asyncio.gather(*task_queue)
 
