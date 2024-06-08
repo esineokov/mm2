@@ -2,11 +2,12 @@ import asyncio
 import logging
 import threading
 from datetime import timedelta
+from typing import Any
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, html, Router, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiomql import MetaTrader, TimeFrame
 from prometheus_client import start_http_server, Gauge
 
@@ -15,13 +16,19 @@ from core.condition.pin_bar_conditions import BullishPinBarCondition, BearishPin
 from core.condition.ring_high_low_condition import RingLowCondition, RingHighCondition
 from core.condition.time_to_close_candle_condition import TimeUntilCandleCloseCondition
 from core.condition.trend_conditions import UpTrendCondition, DownTrendCondition
+from core.models.bot_callback import CreateCallbackData, Action
 from core.strategy.pin_bar_strategies import BullishPinBarStrategy, BearishPinBarStrategy
 from core.strategy.ring_high_low_strategies import RingLowStrategy, RingHighStrategy
 from core.symbol_monitor import SymbolMonitor
 from core.trading_context import TradingContext
 
 
-logging.basicConfig(level=logging.DEBUG)
+# Настройка логирования с хорошим форматом
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s][%(levelname)s][%(name)s][%(funcName)s] - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 lock = threading.RLock()
 
 mt5 = MetaTrader()
@@ -29,21 +36,14 @@ mt5 = MetaTrader()
 
 bot = Bot(token=env.str("TOKEN"), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
+router = Router()
+dp.include_router(router)
 
 
-@dp.message()
-async def echo_handler(message: Message) -> None:
-    """
-    Handler will forward receive a message back to the sender
-
-    By default, message handler will handle all message types (like a text, photo, sticker etc.)
-    """
-    try:
-        # Send a copy of the received message
-        await message.send_copy(chat_id=message.chat.id)
-    except TypeError:
-        # But not all the types is supported to be copied so need to handle it
-        await message.answer("Nice try!")
+@router.callback_query(CreateCallbackData.filter(F.action == Action.create))
+async def callback_query_handler(callback_query: CallbackQuery, callback_data: CreateCallbackData) -> Any:
+    data = CreateCallbackData.unpack(callback_query.data)
+    test = 1
 
 
 async def symbol_activity_monitoring():
@@ -142,6 +142,8 @@ async def main():
 
             task_queue.append(bullish_pin_bar_task)
             task_queue.append(bearish_pin_bar_task)
+
+    task_queue.append(rl_strategy.notify(notify_timeout_s=10))
 
     await asyncio.gather(*task_queue)
 

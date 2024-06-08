@@ -1,6 +1,7 @@
 import asyncio
 import traceback
 
+from pandas import DataFrame
 from prometheus_client import Counter
 
 from core.strategy.base import Strategy
@@ -18,8 +19,9 @@ class SymbolMonitor:
     async def monitor(self, cycle_timeout_s: int = 1, notify_timeout_s: int = 1):
         while True:
             try:
-                if await self.strategy.check_conditions():
-                    await self.strategy.notify(notify_timeout_s)
+                data: DataFrame = await self.context.get_data()
+                if await self.strategy.check_conditions(data):
+                    await self.strategy.notify(notify_timeout_s, data)
             except Exception as e:
                 MONITOR_ERRORS.inc()
                 traceback.print_exc()

@@ -5,7 +5,7 @@ class BullishPinBarStrategy(Strategy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.caption = "Potential Bullish Pin Bar"
-        self.callback_code = "uppb"
+        self.code = "uppb"
 
 
 class BearishPinBarStrategy(Strategy):

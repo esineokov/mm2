@@ -5,7 +5,7 @@ class RingLowStrategy(Strategy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.caption = "Potential Ring-Low pattern"
-        self.callback_code = "rl"
+        self.code = "rl"
 
 
 class RingHighStrategy(Strategy):

@@ -23,8 +23,8 @@ class TimeUntilCandleCloseCondition(Condition):
         super().__init__(*args, **kwargs)
         self.delta = delta
 
-    async def check(self):
-        data: DataFrame = await self.context.get_data(count=2)
+    async def check(self, data: DataFrame | None = None):
+        data: DataFrame = await self.context.get_data() if data is None else data
 
         current_time: datetime = datetime.now(tz=timezone.utc)
         candle_start_time: datetime = data.index[-1].to_pydatetime()
